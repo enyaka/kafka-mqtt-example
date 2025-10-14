@@ -1,0 +1,29 @@
+curl -X POST http://localhost:8083/connectors \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "mqtt-source",
+    "config": {
+      "connector.class": "io.lenses.streamreactor.connect.mqtt.source.MqttSourceConnector",
+      "tasks.max": "1",
+      "connect.mqtt.kcql": "INSERT INTO mqtt_topic SELECT * FROM MTConnect/Document/Current/+",
+      "connect.mqtt.hosts": "tcp://mosquitto:1883",
+      "connect.mqtt.service.quality": "1",
+      "connect.mqtt.client.id": "kafka-connect-mqtt",
+      "connect.mqtt.clean": "true",
+      "connect.progress.enabled": "false",
+      "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+      "key.converter.schemas.enable":"false",
+      "value.converter": "org.apache.kafka.connect.converters.ByteArrayConverter",
+      "value.converter.schemas.enable":"false"
+    }
+  }'
+
+
+Connector list -> curl -s http://localhost:8083/connectors
+Connector Status gosterme -> curl -s http://localhost:8083/connectors/mqtt-source/status
+Connector listesinden silme -> curl -X DELETE http://localhost:8083/connectors/mqtt-source
+Topic list -> docker exec -it kafka kafka-topics.sh --list --bootstrap-server kafka:9092
+Mqtt broker dinleme -> docker exec -it mosquitto mosquitto_sub -h localhost -p 1883 -t "#"
+
+
+Kafka-connect-mqtt jar plugin link -> https://github.com/lensesio/stream-reactor/releases
