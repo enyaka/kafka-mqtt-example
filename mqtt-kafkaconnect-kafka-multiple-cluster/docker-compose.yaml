@@ -1,0 +1,160 @@
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: mosquitto
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-t", "$$SYS/#", "-C", "1", "-i", "healthcheck", "-W", "3"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+
+  kafka-1:
+    image: bitnami/kafka:latest
+    container_name: kafka-1
+    ports:
+      - "9092"   # Internal
+      - "7001:7001"   # External
+    environment:
+      # KRaft settings
+      - KAFKA_KRAFT_CLUSTER_ID=8181
+      - KAFKA_CFG_NODE_ID=1
+      - KAFKA_CFG_PROCESS_ROLES=broker,controller
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@kafka-1:9093,2@kafka-2:9093,3@kafka-3:9093
+      # Listeners
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:7001
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://:9092,EXTERNAL://localhost:7001
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+      # Clustering
+      - KAFKA_CFG_NUM_PARTITIONS=6
+      - KAFKA_CFG_DEFAULT_REPLICATION_FACTOR=3
+      - KAFKA_CFG_MIN_INSYNC_REPLICAS=2
+      # Other
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+    healthcheck:
+      test: ["CMD", "kafka-topics.sh", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    volumes:
+      - kafka_1_data:/bitnami/kafka
+
+  kafka-2:
+    image: bitnami/kafka:latest
+    container_name: kafka-2
+    ports:
+      - "9092"   # Internal
+      - "7002:7002"   # External
+    environment:
+      # KRaft settings
+      - KAFKA_KRAFT_CLUSTER_ID=8181
+      - KAFKA_CFG_NODE_ID=2
+      - KAFKA_CFG_PROCESS_ROLES=broker,controller
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@kafka-1:9093,2@kafka-2:9093,3@kafka-3:9093
+      # Listeners
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:7002
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://:9092,EXTERNAL://localhost:7002
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+      # Clustering
+      - KAFKA_CFG_NUM_PARTITIONS=6
+      - KAFKA_CFG_DEFAULT_REPLICATION_FACTOR=3
+      - KAFKA_CFG_MIN_INSYNC_REPLICAS=2
+      # Other
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+    healthcheck:
+      test: ["CMD", "kafka-topics.sh", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    volumes:
+      - kafka_2_data:/bitnami/kafka
+
+  kafka-3:
+    image: bitnami/kafka:latest
+    container_name: kafka-3
+    ports:
+      - "9092"   # Internal
+      - "7003:7003"   # External
+    environment:
+      # KRaft settings
+      - KAFKA_KRAFT_CLUSTER_ID=8181
+      - KAFKA_CFG_NODE_ID=3
+      - KAFKA_CFG_PROCESS_ROLES=broker,controller
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@kafka-1:9093,2@kafka-2:9093,3@kafka-3:9093
+      # Listeners
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:7003
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://:9092,EXTERNAL://localhost:7003
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+      # Clustering
+      - KAFKA_CFG_NUM_PARTITIONS=6
+      - KAFKA_CFG_DEFAULT_REPLICATION_FACTOR=3
+      - KAFKA_CFG_MIN_INSYNC_REPLICAS=2
+      # Other
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+    healthcheck:
+      test: ["CMD", "kafka-topics.sh", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    volumes:
+      - kafka_3_data:/bitnami/kafka
+  
+  connect:
+    image: confluentinc/cp-kafka-connect:7.7.0
+    container_name: connect
+    depends_on:
+      kafka-1:
+        condition: service_healthy
+      mosquitto:
+        condition: service_healthy
+    ports:
+      - "8083:8083"
+    environment:
+      - CONNECT_BOOTSTRAP_SERVERS=kafka-1:9092,kafka-2:9092,kafka-3:9092,
+      - CONNECT_REST_ADVERTISED_HOST_NAME=connect
+      - CONNECT_GROUP_ID=connect-cluster
+      - CONNECT_CONFIG_STORAGE_TOPIC=_connect-configs
+      - CONNECT_OFFSET_STORAGE_TOPIC=_connect-offsets
+      - CONNECT_STATUS_STORAGE_TOPIC=_connect-status
+      - CONNECT_KEY_CONVERTER=org.apache.kafka.connect.json.JsonConverter
+      - CONNECT_VALUE_CONVERTER=org.apache.kafka.connect.json.JsonConverter
+      - CONNECT_KEY_CONVERTER_SCHEMAS_ENABLE=false
+      - CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE=false
+      - CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR=1
+      - CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR=1
+      - CONNECT_STATUS_STORAGE_REPLICATION_FACTOR=1
+      - CONNECT_PLUGIN_PATH=/usr/share/java,/etc/kafka-connect/jars
+    volumes:
+      - ./connect-plugins:/etc/kafka-connect/jars
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    ports:
+      - "8080:8080"
+    environment:
+      - KAFKA_CLUSTERS_0_NAME=kraft-cluster
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka-1:9092,kafka-2:9092,kafka-3:9092
+      - KAFKA_CLUSTERS_0_ZOOKEEPER=disabled
+    depends_on:
+      - kafka-1
+      - kafka-2
+      - kafka-3
+
+volumes:
+  kafka_1_data:
+    driver: local
+  kafka_2_data:
+    driver: local
+  kafka_3_data:
