@@ -10,6 +10,7 @@ public class ExampleQuery
     public IEnumerable<ConsumerStatus> GetConsumerStatus(
         [Service] KafkaPartitionConsumerManager manager)
     {
+        //i
         return manager.GetStatus();
     }
 }
